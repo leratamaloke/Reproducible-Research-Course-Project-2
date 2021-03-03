@@ -1,0 +1,190 @@
+---
+title:  "Impact of Severe Weather Events on Public Health and the Economy"
+author: "Lerata Maloke"
+date: "March 03, 2021"
+output: "html_document"
+---
+
+Introduction
+
+Synopsis
+
+Storms and other severe weather events can cause both public health and economic problems for communities and municipalities. Many severe events can result in fatalities, injuries, and property damage, and preventing such outcomes to the extent possible is a key concern.
+
+The U.S. National Oceanic and Atmospheric Administration’s (NOAA) storm database tracks characteristics of major storms and weather events in the United States, including when and where they occur, as well as estimates of any fatalities, injuries, and property damage. The data covers 1950 to November 2011.
+
+This project explores NOAA’s storm database with the goal of answering two questions. First, what storm events are the most harmful to population health? Second, what storm events have the greatest economic consequences?
+
+Data Processing
+On local drive place the dataset in a folder named ‘data’ within the current working directory.
+Load in the data and then select only the relevant parameters.
+
+```{r}
+library(ggplot2)
+library(knitr)
+stormData <- read.csv("C:/Users/Lerata Maloke/Downloads/repdata_data_StormData.csv.bz2")
+stormData <- subset(stormData,select=c("EVTYPE","FATALITIES","INJURIES","PROPDMG","PROPDMGEXP","CROPDMG","CROPDMGEXP"))
+```
+
+To determine which type of events are most harmful to population health, focus on the fatalities and injuries parameters. Calculate the total number of fatalities per weather event type and rank the events. For each event type, calculate the percent of overall total fatalitites accounted for by that event. Repeat these steps for injuries.
+
+Fatalities Data Processing:
+
+```{r}
+#calculate the total deaths by event type
+deathsByType <- aggregate(FATALITIES~EVTYPE,data=stormData,sum,na.rm=TRUE)
+#find the number of event types that account for at least one death
+deadlyEvents <- sum(deathsByType$FATALITIES>0)
+#find the total number of deaths due to storm events for entire dataset
+totalDeaths <- sum(deathsByType$FATALITIES)
+```
+
+```{r}
+#order by decreasing total fatalities
+deathsByType <- deathsByType[order(deathsByType$FATALITIES,decreasing=TRUE),]
+```
+
+```{r}
+#add column - percent of total fatalities
+deathsByType$Percent <- (deathsByType$FATALITIES /totalDeaths)*100
+```
+
+```{r}
+#fix rowname numbers
+rownames(deathsByType) <- 1:nrow(deathsByType)
+```
+
+```{r}
+#display the top 10 most deadly event types
+head(deathsByType,10)
+```
+
+Injuries Data Processing:
+
+```{r}
+#calculate the total injuries by event type
+injuriesByType <- aggregate(INJURIES~EVTYPE,data=stormData,sum,na.rm=TRUE)
+#find the number of event types that account for at least one injury
+injuryEvents <- sum(injuriesByType$INJURIES>0)
+#find the total number of injuries due to storm events for entire dataset
+totalInjuries <- sum(injuriesByType$INJURIES)
+```
+
+```{r}
+#order by decreasing total injuries
+injuriesByType <- injuriesByType[order(injuriesByType$INJURIES,decreasing=TRUE),]
+```
+
+```{r}
+#add column - percent of total injuries
+injuriesByType$Percent <- (injuriesByType$INJURIES /totalInjuries)*100
+rownames(injuriesByType) <- 1:nrow(injuriesByType)
+```
+
+```{r}
+#display top 10 most injurous events
+head(injuriesByType,10)
+```
+
+To determine which type of events have the most severe economic consequences, focus on the property damage and crop damage parameters. Create a new parameter named TotalCost which is the sum of the property and crop damage for a particular event.
+
+Economic Damage Preprocessing:
+Use the PROPDMGEXP and CROPDMGEXP parameters as multiplying factor for their respective parameters. For example, for a particular event, if the PROPDMG = 25 and the PROPDMGEXP = K, the actual property damage is $25,000.
+
+```{r}
+#make sure all exponents are upper case characters
+stormData$PROPDMGEXP <- toupper(stormData$PROPDMGEXP)
+stormData$CROPDMGEXP <- toupper(stormData$CROPDMGEXP)
+```
+
+```{r}
+#make sure all exponents are numeric values
+stormData$PROPDMGEXP[(stormData$PROPDMGEXP == "")] <- 0 
+stormData$PROPDMGEXP[(stormData$PROPDMGEXP == "+") | (stormData$PROPDMGEXP == "-") | (stormData$PROPDMGEXP == "?")] <- 1
+stormData$PROPDMGEXP[(stormData$PROPDMGEXP == "K")] <- 3
+stormData$PROPDMGEXP[(stormData$PROPDMGEXP == "M")] <- 6
+stormData$PROPDMGEXP[(stormData$PROPDMGEXP == "B")] <- 9
+
+stormData$CROPDMGEXP[(stormData$CROPDMGEXP == "")] <- 0 
+stormData$CROPDMGEXP[(stormData$CROPDMGEXP == "+") | (stormData$CROPDMGEXP == "-") | (stormData$CROPDMGEXP == "?")] <- 1
+stormData$CROPDMGEXP[(stormData$CROPDMGEXP == "K")] <- 3
+stormData$CROPDMGEXP[(stormData$CROPDMGEXP == "M")] <- 6
+stormData$CROPDMGEXP[(stormData$CROPDMGEXP == "B")] <- 9
+```
+
+```{r}
+#convet all exponents to integers (set data type)
+stormData$PROPDMGEXP <- as.integer(stormData$PROPDMGEXP)
+## Warning: NAs introduced by coercion
+stormData$CROPDMGEXP <- as.integer(stormData$CROPDMGEXP)
+#calculate actual damage cost values
+stormData$PropDmgCost <- stormData$PROPDMG * 10^stormData$PROPDMGEXP
+stormData$CropDmgCost <- stormData$CROPDMG * 10^stormData$CROPDMGEXP
+#add property damage and crop damage to find total cost
+stormData$TotalCost <- stormData$PropDmgCost + stormData$CropDmgCost
+```
+
+Total Cost Processing:
+Calculate the overall total TotalCost per weather event type and rank the events. For each event type, calculate the percent of overall total cost accounted for by that event.
+
+```{r}
+#calculate the total economic damage by event type
+costByType <- aggregate(TotalCost~EVTYPE,data=stormData,sum,na.rm=TRUE)
+#find the number of event types that account for any economic damage
+costEvents <- sum(costByType$TotalCost>0)
+#find the total sum of economic damage due to storm events for entire dataset
+GrandTotal <- sum(costByType$TotalCost)
+```
+
+```{r}
+#order by decreasing total cost
+costByType <- costByType[order(costByType$TotalCost,decreasing=TRUE),]
+rownames(costByType) <- 1:nrow(costByType)
+```
+
+```{r}
+#add column - percent of total cost
+costByType$Percent <- (costByType$TotalCost /GrandTotal)*100
+```
+
+```{r}
+#display top 10 most expensive events
+head(costByType,10)
+```
+
+Results
+1. Across the United States, which types of events are most harmful with respect to population health?
+Plot total fatalities for top 10 most harmful events:
+
+```{r}
+library(ggplot2)
+g <- ggplot(deathsByType[1:10,], aes(reorder(EVTYPE,-FATALITIES),FATALITIES))
+g + geom_bar(stat="identity") + theme(axis.text.x = element_text(angle=45, hjust=1)) + labs(x="Event Type",y="Total Fatalities",title="Top 10 Deadliest Storm Events")
+```
+
+Of 985 different severe weather events recorded from 1950 to 2011, 168 events caused at least one fatality (17.0558376% of events).
+Tornadoes caused the most deaths, accounting for 37% of all deaths caused by severe weather events in the US. Excessive heat was the second most deadly event type, accounting for 12.6% of all storm related deaths.
+
+Plot total injuries for top 10 most harmful events:
+
+```{r}
+g <- ggplot(injuriesByType[1:10,], aes(reorder(EVTYPE,-INJURIES),INJURIES))
+g + geom_bar(stat="identity") + theme(axis.text.x = element_text(angle=45, hjust=1)) + labs(x="Event Type",y="Total Injuries",title="Top 10 Storm Events with Highest Injury Incidence")
+```
+Overall, 158 events caused at least one injury (16.0406091% of events).
+Tornadoes caused the most injuries, accounting for 65% of all injuries caused by severe weather events in the US. TSTM (Thunderstorm) Wind had the second highest injury incidence, accounting for 5% of all storm related injuries.
+
+2. Across the United States, which types of events have the greatest economic consequences?
+Plot toal cost (property and crop damage) for top 10 most expensive events:
+
+```{r}
+g <- ggplot(costByType[1:10,], aes(reorder(EVTYPE,-TotalCost),TotalCost))
+g + geom_bar(stat="identity") + theme(axis.text.x = element_text(angle=45, hjust=1)) + labs(x="Event Type",y="Total Cost",title="Top 10 Storm Events with Highest Total Economic Cost")
+```
+
+Overall, 430 events resulted in either property or crop damages (43.6548223% of events). The total cost of damages caused by all recorded severe weather events in the dataset is $4.773290610^{11}.
+Floods caused the most economic damage, accounting for 31% of all damage caused by storms. Hurricanes/Typhoons accounted for 15% of all damage, and Tornadoes accounted for 12% of all damage.
+
+Observations:
+
+With respect to population health, it is clear that tornadoes are the most harmful weather events in the US. Tornadoes are responsible for the most deaths and injuries of all severe weather events. However, when considering economic consequences, tornadoes are only the third most damaging events. Floods and hurricanes/typhoons (which involve massive flooding) have greater economic consequences than tornadoes.
